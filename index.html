@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a18">
+<title>タイマー</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f3;
+    color: #1a1a18;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: 1rem;
+  }
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    border: 0.5px solid #d3d1c7;
+    padding: 2rem 1.5rem 1.5rem;
+    width: 100%;
+    max-width: 400px;
+  }
+  h1 { font-size: 14px; font-weight: 500; color: #888780; margin-bottom: 1.2rem; letter-spacing: 0.04em; }
+  .mode-tabs { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+  .tab {
+    flex: 1; padding: 10px;
+    border: 0.5px solid #b4b2a9;
+    border-radius: 10px;
+    background: transparent;
+    color: #888780;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab.active {
+    background: #f1efe8;
+    color: #1a1a18;
+    border-color: #888780;
+    font-weight: 500;
+  }
+  .display {
+    font-size: 72px;
+    font-weight: 500;
+    text-align: center;
+    letter-spacing: -2px;
+    color: #1a1a18;
+    margin: 0.8rem 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .progress-bar { height: 4px; background: #d3d1c7; border-radius: 2px; margin: 0.4rem 0 1.2rem; overflow: hidden; }
+  .progress-fill { height: 100%; background: #1a1a18; border-radius: 2px; transition: width 1s linear; width: 0%; }
+  .inputs { display: flex; gap: 10px; justify-content: center; margin-bottom: 1.2rem; }
+  .time-input { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .time-input input {
+    width: 80px; text-align: center;
+    font-size: 22px; padding: 8px 4px;
+    border: 0.5px solid #b4b2a9;
+    border-radius: 10px;
+    background: #fff;
+    color: #1a1a18;
+    outline: none;
+  }
+  .time-input input:focus { border-color: #888780; }
+  .time-input label { font-size: 12px; color: #888780; }
+  .controls { display: flex; gap: 8px; justify-content: center; margin: 1rem 0; }
+  .btn {
+    padding: 11px 20px;
+    border: 0.5px solid #b4b2a9;
+    border-radius: 10px;
+    background: transparent;
+    color: #1a1a18;
+    font-size: 15px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { opacity: 0.7; transform: scale(0.97); }
+  .btn.primary {
+    background: #1a1a18;
+    color: #fff;
+    border-color: #1a1a18;
+  }
+  .status { text-align: center; font-size: 13px; color: #888780; min-height: 20px; margin-top: 4px; }
+  .vol-row { display: flex; align-items: center; gap: 10px; margin-top: 1.4rem; padding-top: 1.2rem; border-top: 0.5px solid #d3d1c7; }
+  .vol-row label { font-size: 13px; color: #888780; min-width: 30px; }
+  .vol-row input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: #d3d1c7;
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .vol-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #1a1a18;
+    cursor: pointer;
+  }
+  .vol-row span { font-size: 13px; color: #888780; min-width: 36px; text-align: right; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #1c1c1a; color: #e8e6df; }
+    .card { background: #2c2c2a; border-color: #444441; }
+    .tab { border-color: #5f5e5a; color: #888780; }
+    .tab.active { background: #444441; color: #e8e6df; border-color: #888780; }
+    .display { color: #e8e6df; }
+    .progress-bar { background: #444441; }
+    .progress-fill { background: #e8e6df; }
+    .time-input input { background: #2c2c2a; color: #e8e6df; border-color: #5f5e5a; }
+    .btn { border-color: #5f5e5a; color: #e8e6df; }
+    .btn.primary { background: #e8e6df; color: #1c1c1a; border-color: #e8e6df; }
+    .vol-row { border-color: #444441; }
+    .vol-row input[type=range] { background: #444441; }
+    .vol-row input[type=range]::-webkit-slider-thumb { background: #e8e6df; }
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>TIMER</h1>
+  <div class="mode-tabs">
+    <button class="tab active" id="tab-countdown" onclick="setMode('countdown')">カウントダウン</button>
+    <button class="tab" id="tab-countup" onclick="setMode('countup')">カウントアップ</button>
+  </div>
+
+  <div class="display" id="display">00:00:00</div>
+
+  <div class="progress-bar" id="progress-wrap">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <div class="inputs" id="inputs">
+    <div class="time-input">
+      <input type="number" id="h-input" min="0" max="99" value="0" />
+      <label>時間</label>
+    </div>
+    <div class="time-input">
+      <input type="number" id="m-input" min="0" max="59" value="5" />
+      <label>分</label>
+    </div>
+    <div class="time-input">
+      <input type="number" id="s-input" min="0" max="59" value="0" />
+      <label>秒</label>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="startBtn" onclick="startStop()">スタート</button>
+    <button class="btn" onclick="reset()">リセット</button>
+    <button class="btn" onclick="testBeep()">テスト音</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="vol-row">
+    <label>音量</label>
+    <input type="range" id="vol" min="0" max="100" value="70" step="1" oninput="updateVol()" />
+    <span id="vol-out">70%</span>
+  </div>
+</div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+
+  let mode = 'countdown', running = false, interval = null;
+  let elapsed = 0, totalSeconds = 0, volume = 0.7;
+  let audioCtx = null;
+
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function beep(vol) {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6);
+  }
+
+  function beepAlarm(vol) {
+    const ctx = getAudioCtx();
+    [0, 0.35, 0.7].forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime + t);
+      gain.gain.setValueAtTime(vol, ctx.currentTime + t);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.28);
+      osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.28);
+    });
+  }
+
+  function updateVol() {
+    volume = parseInt(document.getElementById('vol').value) / 100;
+    document.getElementById('vol-out').textContent = document.getElementById('vol').value + '%';
+  }
+
+  function testBeep() { beep(volume); }
+
+  function setMode(m) {
+    if (running) reset();
+    mode = m;
+    document.getElementById('tab-countdown').classList.toggle('active', m === 'countdown');
+    document.getElementById('tab-countup').classList.toggle('active', m === 'countup');
+    document.getElementById('inputs').style.display = m === 'countdown' ? 'flex' : 'none';
+    document.getElementById('progress-wrap').style.display = m === 'countdown' ? 'block' : 'none';
+    document.getElementById('progress-fill').style.width = '0%';
+    elapsed = 0; updateDisplay(0);
+    document.getElementById('status').textContent = '';
+  }
+
+  function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
+
+  function updateDisplay(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    document.getElementById('display').textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+  }
+
+  function startStop() {
+    if (running) {
+      clearInterval(interval); running = false;
+      document.getElementById('startBtn').textContent = 'スタート';
+      document.getElementById('status').textContent = '一時停止中';
+    } else {
+      if (mode === 'countdown') {
+        if (elapsed === 0) {
+          const h = parseInt(document.getElementById('h-input').value) || 0;
+          const m = parseInt(document.getElementById('m-input').value) || 0;
+          const s = parseInt(document.getElementById('s-input').value) || 0;
+          totalSeconds = h * 3600 + m * 60 + s;
+          if (totalSeconds <= 0) { document.getElementById('status').textContent = '時間を設定してください'; return; }
+          elapsed = totalSeconds;
+        }
+        running = true;
+        document.getElementById('startBtn').textContent = '一時停止';
+        document.getElementById('status').textContent = '計測中...';
+        interval = setInterval(() => {
+          elapsed--;
+          updateDisplay(elapsed);
+          const pct = totalSeconds > 0 ? ((totalSeconds - elapsed) / totalSeconds * 100) : 0;
+          document.getElementById('progress-fill').style.width = pct.toFixed(1) + '%';
+          if (elapsed <= 0) {
+            clearInterval(interval); running = false;
+            updateDisplay(0);
+            document.getElementById('progress-fill').style.width = '100%';
+            document.getElementById('startBtn').textContent = 'スタート';
+            document.getElementById('status').textContent = '完了！';
+            beepAlarm(volume); elapsed = 0;
+          }
+        }, 1000);
+      } else {
+        running = true;
+        document.getElementById('startBtn').textContent = '一時停止';
+        document.getElementById('status').textContent = '計測中...';
+        interval = setInterval(() => { elapsed++; updateDisplay(elapsed); }, 1000);
+      }
+    }
+  }
+
+  function reset() {
+    clearInterval(interval); running = false; elapsed = 0;
+    document.getElementById('startBtn').textContent = 'スタート';
+    document.getElementById('status').textContent = '';
+    document.getElementById('progress-fill').style.width = '0%';
+    updateDisplay(0);
+  }
+</script>
+</body>
+</html>
