@@ -88,6 +88,19 @@
     border-color: #1a1a18;
   }
   .status { text-align: center; font-size: 13px; color: #888780; min-height: 20px; margin-top: 4px; }
+  .shortcuts { display: flex; gap: 8px; justify-content: center; margin-bottom: 1.2rem; }
+  .shortcut {
+    flex: 1; padding: 8px 4px;
+    border: 0.5px solid #b4b2a9;
+    border-radius: 10px;
+    background: transparent;
+    color: #888780;
+    font-size: 13px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.15s;
+  }
+  .shortcut:active { opacity: 0.7; transform: scale(0.97); }
   .vol-row { display: flex; align-items: center; gap: 10px; margin-top: 1.4rem; padding-top: 1.2rem; border-top: 0.5px solid #d3d1c7; }
   .vol-row label { font-size: 13px; color: #888780; min-width: 30px; }
   .vol-row input[type=range] {
@@ -119,6 +132,7 @@
     .time-input input { background: #2c2c2a; color: #e8e6df; border-color: #5f5e5a; }
     .btn { border-color: #5f5e5a; color: #e8e6df; }
     .btn.primary { background: #e8e6df; color: #1c1c1a; border-color: #e8e6df; }
+    .shortcut { border-color: #5f5e5a; color: #888780; }
     .vol-row { border-color: #444441; }
     .vol-row input[type=range] { background: #444441; }
     .vol-row input[type=range]::-webkit-slider-thumb { background: #e8e6df; }
@@ -152,6 +166,12 @@
       <input type="number" id="s-input" min="0" max="59" value="0" />
       <label>秒</label>
     </div>
+  </div>
+
+  <div class="shortcuts" id="shortcuts">
+    <button class="shortcut" onclick="setShortcut(15)">15秒</button>
+    <button class="shortcut" onclick="setShortcut(30)">30秒</button>
+    <button class="shortcut" onclick="setShortcut(60)">1分</button>
   </div>
 
   <div class="controls">
@@ -222,6 +242,7 @@
     document.getElementById('tab-countdown').classList.toggle('active', m === 'countdown');
     document.getElementById('tab-countup').classList.toggle('active', m === 'countup');
     document.getElementById('inputs').style.display = m === 'countdown' ? 'flex' : 'none';
+    document.getElementById('shortcuts').style.display = m === 'countdown' ? 'flex' : 'none';
     document.getElementById('progress-wrap').style.display = m === 'countdown' ? 'block' : 'none';
     document.getElementById('progress-fill').style.width = '0%';
     elapsed = 0; updateDisplay(0);
@@ -278,8 +299,25 @@
     }
   }
 
+  function setShortcut(secs) {
+    if (running) reset();
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    document.getElementById('h-input').value = h;
+    document.getElementById('m-input').value = m;
+    document.getElementById('s-input').value = s;
+    elapsed = 0;
+    updateDisplay(0);
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('status').textContent = '';
+  }
+
   function reset() {
     clearInterval(interval); running = false; elapsed = 0;
+    document.getElementById('h-input').value = 0;
+    document.getElementById('m-input').value = 0;
+    document.getElementById('s-input').value = 0;
     document.getElementById('startBtn').textContent = 'スタート';
     document.getElementById('status').textContent = '';
     document.getElementById('progress-fill').style.width = '0%';
