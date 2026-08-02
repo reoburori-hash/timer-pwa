@@ -74,7 +74,7 @@
     min-height: 16px;
   }
   .progress-bar { height: 4px; background: #d3d1c7; border-radius: 2px; margin: 0.4rem 0 1.2rem; overflow: hidden; }
-  .progress-fill { height: 100%; background: #1a1a18; border-radius: 2px; transition: width 1s linear; width: 0%; }
+  .progress-fill { height: 100%; background: #1a1a18; border-radius: 2px; transition: width 0.5s linear; width: 0%; }
   .progress-fill.rest { background: #a06b4a; }
   .inputs { display: flex; gap: 10px; justify-content: center; margin-bottom: 1.2rem; }
   .time-input { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -99,10 +99,8 @@
     font-size: 13px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: all 0.15s;
   }
   .shortcut:active { opacity: 0.7; transform: scale(0.97); }
-
   .sets-section {
     border-top: 0.5px solid #d3d1c7;
     margin-top: 0.4rem;
@@ -135,11 +133,7 @@
     transition: transform 0.15s;
   }
   .switch.on .switch-knob { transform: translateX(18px); }
-  .sets-fields {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-  }
+  .sets-fields { display: flex; gap: 10px; justify-content: center; }
   .sets-fields.hidden { display: none; }
   .set-field { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
   .set-field input {
@@ -152,7 +146,6 @@
     outline: none;
   }
   .set-field label { font-size: 11px; color: #888780; text-align: center; }
-
   .controls { display: flex; gap: 8px; justify-content: center; margin: 1rem 0; }
   .btn {
     padding: 11px 20px;
@@ -165,29 +158,19 @@
     -webkit-tap-highlight-color: transparent;
   }
   .btn:active { opacity: 0.7; transform: scale(0.97); }
-  .btn.primary {
-    background: #1a1a18;
-    color: #fff;
-    border-color: #1a1a18;
-  }
+  .btn.primary { background: #1a1a18; color: #fff; border-color: #1a1a18; }
   .status { text-align: center; font-size: 13px; color: #888780; min-height: 20px; margin-top: 4px; }
   .vol-row { display: flex; align-items: center; gap: 10px; margin-top: 1.4rem; padding-top: 1.2rem; border-top: 0.5px solid #d3d1c7; }
   .vol-row label { font-size: 13px; color: #888780; min-width: 30px; }
   .vol-row input[type=range] {
-    flex: 1;
-    -webkit-appearance: none;
-    height: 4px;
-    background: #d3d1c7;
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
+    flex: 1; -webkit-appearance: none;
+    height: 4px; background: #d3d1c7;
+    border-radius: 2px; outline: none; cursor: pointer;
   }
   .vol-row input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 22px; height: 22px;
-    border-radius: 50%;
-    background: #1a1a18;
-    cursor: pointer;
+    border-radius: 50%; background: #1a1a18; cursor: pointer;
   }
   .vol-row span { font-size: 13px; color: #888780; min-width: 36px; text-align: right; }
 
@@ -298,37 +281,38 @@
   }
 
   let mode = 'countdown', running = false, interval = null;
-  let elapsed = 0, totalSeconds = 0, volume = 0.7;
+  let volume = 0.7;
   let audioCtx = null;
 
-  // セット機能の状態
+  // セット機能
   let setsEnabled = false;
   let currentSet = 1, totalSets = 1;
   let currentPhase = 'work'; // 'work' | 'rest'
   let workSeconds = 0, restSeconds = 0;
 
+  // バックグラウンド対応：終了予定時刻を記録
+  let phaseEndTime = null;   // 現フェーズの終了予定時刻 (Date.now() ms)
+  let countupStartTime = null; // カウントアップ開始時刻
+
+  // ---- Audio ----
   function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     return audioCtx;
   }
-
   function beep(vol) {
     const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(880, ctx.currentTime);
     gain.gain.setValueAtTime(vol, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6);
+    osc.start(); osc.stop(ctx.currentTime + 0.6);
   }
-
   function beepAlarm(vol) {
     const ctx = getAudioCtx();
     [0, 0.35, 0.7].forEach(t => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
       osc.type = 'sine';
       osc.frequency.setValueAtTime(880, ctx.currentTime + t);
@@ -337,27 +321,75 @@
       osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.28);
     });
   }
-
-  // 軽いビープ（フェーズ切り替え用、1回だけ）
   function beepShort(vol) {
     const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(660, ctx.currentTime);
     gain.gain.setValueAtTime(vol, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.35);
+    osc.start(); osc.stop(ctx.currentTime + 0.35);
   }
-
   function updateVol() {
     volume = parseInt(document.getElementById('vol').value) / 100;
     document.getElementById('vol-out').textContent = document.getElementById('vol').value + '%';
   }
-
   function testBeep() { beep(volume); }
 
+  // ---- UI helpers ----
+  function pad(n) { return String(Math.floor(Math.max(0, n))).padStart(2, '0'); }
+  function updateDisplay(secs) {
+    secs = Math.max(0, secs);
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    document.getElementById('display').textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+  }
+  function updatePhaseUI() {
+    const label = document.getElementById('phase-label');
+    const fill = document.getElementById('progress-fill');
+    if (!setsEnabled) {
+      label.textContent = ''; label.className = 'phase-label';
+      fill.classList.remove('rest');
+      document.getElementById('set-counter').textContent = '';
+      return;
+    }
+    if (currentPhase === 'work') {
+      label.textContent = 'がんばる'; label.className = 'phase-label work';
+      fill.classList.remove('rest');
+    } else {
+      label.textContent = '休憩'; label.className = 'phase-label rest';
+      fill.classList.add('rest');
+    }
+    document.getElementById('set-counter').textContent = currentSet + ' / ' + totalSets + ' セット';
+  }
+
+  // ---- Mode / Shortcut ----
+  function setMode(m) {
+    if (running) reset();
+    mode = m;
+    document.getElementById('tab-countdown').classList.toggle('active', m === 'countdown');
+    document.getElementById('tab-countup').classList.toggle('active', m === 'countup');
+    ['inputs','shortcuts','sets-section'].forEach(id =>
+      document.getElementById(id).style.display = m === 'countdown' ? (id === 'sets-section' ? 'block' : 'flex') : 'none'
+    );
+    document.getElementById('progress-wrap').style.display = m === 'countdown' ? 'block' : 'none';
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('phase-label').textContent = '';
+    document.getElementById('set-counter').textContent = '';
+    document.getElementById('status').textContent = '';
+    updateDisplay(0);
+  }
+  function setShortcut(secs) {
+    if (running) reset();
+    document.getElementById('h-input').value = Math.floor(secs / 3600);
+    document.getElementById('m-input').value = Math.floor((secs % 3600) / 60);
+    document.getElementById('s-input').value = secs % 60;
+    updateDisplay(0);
+    document.getElementById('progress-fill').style.width = '0%';
+    document.getElementById('status').textContent = '';
+  }
   function toggleSets() {
     if (running) reset();
     setsEnabled = !setsEnabled;
@@ -367,191 +399,75 @@
     document.getElementById('phase-label').textContent = '';
   }
 
-  function setMode(m) {
-    if (running) reset();
-    mode = m;
-    document.getElementById('tab-countdown').classList.toggle('active', m === 'countdown');
-    document.getElementById('tab-countup').classList.toggle('active', m === 'countup');
-    document.getElementById('inputs').style.display = m === 'countdown' ? 'flex' : 'none';
-    document.getElementById('shortcuts').style.display = m === 'countdown' ? 'flex' : 'none';
-    document.getElementById('sets-section').style.display = m === 'countdown' ? 'block' : 'none';
-    document.getElementById('progress-wrap').style.display = m === 'countdown' ? 'block' : 'none';
-    document.getElementById('progress-fill').style.width = '0%';
-    elapsed = 0; updateDisplay(0);
-    document.getElementById('status').textContent = '';
-    document.getElementById('phase-label').textContent = '';
-    document.getElementById('set-counter').textContent = '';
-  }
+  // ---- Core tick (時刻ベース) ----
+  function tick() {
+    if (!running) return;
 
-  function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
-
-  function updateDisplay(secs) {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    document.getElementById('display').textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
-  }
-
-  function setShortcut(secs) {
-    if (running) reset();
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    document.getElementById('h-input').value = h;
-    document.getElementById('m-input').value = m;
-    document.getElementById('s-input').value = s;
-    elapsed = 0;
-    updateDisplay(0);
-    document.getElementById('progress-fill').style.width = '0%';
-    document.getElementById('status').textContent = '';
-  }
-
-  function updatePhaseUI() {
-    const label = document.getElementById('phase-label');
-    const fill = document.getElementById('progress-fill');
-    if (!setsEnabled) {
-      label.textContent = '';
-      label.className = 'phase-label';
-      fill.classList.remove('rest');
-      document.getElementById('set-counter').textContent = '';
-      return;
-    }
-    if (currentPhase === 'work') {
-      label.textContent = 'がんばる';
-      label.className = 'phase-label work';
-      fill.classList.remove('rest');
-    } else {
-      label.textContent = '休憩';
-      label.className = 'phase-label rest';
-      fill.classList.add('rest');
-    }
-    document.getElementById('set-counter').textContent = currentSet + ' / ' + totalSets + ' セット';
-  }
-
-  function startStop() {
-    if (running) {
-      clearInterval(interval); running = false;
-      document.getElementById('startBtn').textContent = 'スタート';
-      document.getElementById('status').textContent = '一時停止中';
+    if (mode === 'countup') {
+      const elapsed = Math.floor((Date.now() - countupStartTime) / 1000);
+      updateDisplay(elapsed);
       return;
     }
 
-    if (mode === 'countdown') {
-      if (elapsed === 0) {
-        const h = parseInt(document.getElementById('h-input').value) || 0;
-        const m = parseInt(document.getElementById('m-input').value) || 0;
-        const s = parseInt(document.getElementById('s-input').value) || 0;
-        workSeconds = h * 3600 + m * 60 + s;
-        if (workSeconds <= 0) { document.getElementById('status').textContent = '時間を設定してください'; return; }
+    // countdown
+    const remaining = Math.ceil((phaseEndTime - Date.now()) / 1000);
+    const phaseSecs = currentPhase === 'work' ? workSeconds : restSeconds;
+    updateDisplay(remaining);
+    const pct = phaseSecs > 0 ? ((phaseSecs - remaining) / phaseSecs * 100) : 0;
+    document.getElementById('progress-fill').style.width = Math.min(100, Math.max(0, pct)).toFixed(1) + '%';
 
-        if (setsEnabled) {
-          totalSets = parseInt(document.getElementById('sets-input').value) || 1;
-          if (totalSets < 1) totalSets = 1;
-          const rm = parseInt(document.getElementById('rest-m-input').value) || 0;
-          const rs = parseInt(document.getElementById('rest-s-input').value) || 0;
-          restSeconds = rm * 60 + rs;
-          currentSet = 1;
-          currentPhase = 'work';
-        } else {
-          totalSets = 1; currentSet = 1; currentPhase = 'work';
-        }
-
-        totalSeconds = workSeconds;
-        elapsed = totalSeconds;
-        updatePhaseUI();
-      }
-
-      running = true;
-      document.getElementById('startBtn').textContent = '一時停止';
-      document.getElementById('status').textContent = '計測中...';
-
-      interval = setInterval(() => {
-        elapsed--;
-        updateDisplay(elapsed);
-        const pct = totalSeconds > 0 ? ((totalSeconds - elapsed) / totalSeconds * 100) : 0;
-        document.getElementById('progress-fill').style.width = pct.toFixed(1) + '%';
-
-        if (elapsed <= 0) {
-          handlePhaseComplete();
-        }
-      }, 1000);
-    } else {
-      running = true;
-      document.getElementById('startBtn').textContent = '一時停止';
-      document.getElementById('status').textContent = '計測中...';
-      interval = setInterval(() => { elapsed++; updateDisplay(elapsed); }, 1000);
+    if (remaining <= 0) {
+      handlePhaseComplete();
     }
+  }
+
+  function startCountdownPhase(durationSecs) {
+    phaseEndTime = Date.now() + durationSecs * 1000;
+    updatePhaseUI();
+    document.getElementById('progress-fill').style.width = '0%';
   }
 
   function handlePhaseComplete() {
-    clearInterval(interval);
+    clearInterval(interval); interval = null;
 
     if (!setsEnabled) {
-      // 通常タイマー完了
-      running = false;
-      updateDisplay(0);
-      document.getElementById('progress-fill').style.width = '100%';
-      document.getElementById('startBtn').textContent = 'スタート';
-      document.getElementById('status').textContent = '完了！';
-      beepAlarm(volume);
-      elapsed = 0;
+      finishTimer();
       return;
     }
-
-    // セットモード：フェーズ遷移ロジック
     if (currentPhase === 'work') {
       if (restSeconds > 0 && currentSet < totalSets) {
-        // 休憩へ
         currentPhase = 'rest';
-        totalSeconds = restSeconds;
-        elapsed = restSeconds;
         beepShort(volume);
-        updatePhaseUI();
-        document.getElementById('progress-fill').style.width = '0%';
-        interval = setInterval(tickSets, 1000);
-        return;
+        startCountdownPhase(restSeconds);
+        interval = setInterval(tick, 500);
       } else if (currentSet < totalSets) {
-        // 休憩なし、次のセットへ
         currentSet++;
         currentPhase = 'work';
-        totalSeconds = workSeconds;
-        elapsed = workSeconds;
         beepShort(volume);
+        startCountdownPhase(workSeconds);
         updatePhaseUI();
-        document.getElementById('progress-fill').style.width = '0%';
-        interval = setInterval(tickSets, 1000);
-        return;
+        interval = setInterval(tick, 500);
       } else {
-        // 全セット完了
         finishAllSets();
-        return;
       }
     } else {
-      // 休憩終わり → 次のworkセットへ
       currentSet++;
-      if (currentSet > totalSets) {
-        finishAllSets();
-        return;
-      }
+      if (currentSet > totalSets) { finishAllSets(); return; }
       currentPhase = 'work';
-      totalSeconds = workSeconds;
-      elapsed = workSeconds;
       beepShort(volume);
+      startCountdownPhase(workSeconds);
       updatePhaseUI();
-      document.getElementById('progress-fill').style.width = '0%';
-      interval = setInterval(tickSets, 1000);
-      return;
+      interval = setInterval(tick, 500);
     }
   }
 
-  function tickSets() {
-    elapsed--;
-    updateDisplay(elapsed);
-    const pct = totalSeconds > 0 ? ((totalSeconds - elapsed) / totalSeconds * 100) : 0;
-    document.getElementById('progress-fill').style.width = pct.toFixed(1) + '%';
-    if (elapsed <= 0) {
-      handlePhaseComplete();
-    }
+  function finishTimer() {
+    running = false;
+    updateDisplay(0);
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('startBtn').textContent = 'スタート';
+    document.getElementById('status').textContent = '完了！';
+    beepAlarm(volume);
   }
 
   function finishAllSets() {
@@ -563,11 +479,62 @@
     document.getElementById('phase-label').textContent = '完了';
     document.getElementById('phase-label').className = 'phase-label work';
     beepAlarm(volume);
-    elapsed = 0;
+  }
+
+  // ---- Start / Stop / Reset ----
+  function startStop() {
+    if (running) {
+      clearInterval(interval); interval = null;
+      running = false;
+      document.getElementById('startBtn').textContent = 'スタート';
+      document.getElementById('status').textContent = '一時停止中';
+      return;
+    }
+
+    if (mode === 'countup') {
+      if (!countupStartTime) countupStartTime = Date.now();
+      running = true;
+      document.getElementById('startBtn').textContent = '一時停止';
+      document.getElementById('status').textContent = '計測中...';
+      interval = setInterval(tick, 500);
+      return;
+    }
+
+    // countdown: 最初のスタートのときだけ設定を読む
+    if (!phaseEndTime) {
+      const h = parseInt(document.getElementById('h-input').value) || 0;
+      const m = parseInt(document.getElementById('m-input').value) || 0;
+      const s = parseInt(document.getElementById('s-input').value) || 0;
+      workSeconds = h * 3600 + m * 60 + s;
+      if (workSeconds <= 0) { document.getElementById('status').textContent = '時間を設定してください'; return; }
+
+      if (setsEnabled) {
+        totalSets = Math.max(1, parseInt(document.getElementById('sets-input').value) || 1);
+        const rm = parseInt(document.getElementById('rest-m-input').value) || 0;
+        const rs = parseInt(document.getElementById('rest-s-input').value) || 0;
+        restSeconds = rm * 60 + rs;
+      } else {
+        totalSets = 1; restSeconds = 0;
+      }
+      currentSet = 1; currentPhase = 'work';
+      startCountdownPhase(workSeconds);
+    } else {
+      // 一時停止からの再開：残り時間を保持して再設定
+      const remaining = Math.ceil((phaseEndTime - Date.now()) / 1000);
+      const dur = currentPhase === 'work' ? workSeconds : restSeconds;
+      phaseEndTime = Date.now() + Math.max(0, remaining) * 1000;
+    }
+
+    running = true;
+    document.getElementById('startBtn').textContent = '一時停止';
+    document.getElementById('status').textContent = '計測中...';
+    interval = setInterval(tick, 500);
   }
 
   function reset() {
-    clearInterval(interval); running = false; elapsed = 0;
+    clearInterval(interval); interval = null;
+    running = false; phaseEndTime = null; countupStartTime = null;
+    currentSet = 1; currentPhase = 'work';
     document.getElementById('h-input').value = 0;
     document.getElementById('m-input').value = 0;
     document.getElementById('s-input').value = 0;
@@ -577,9 +544,19 @@
     document.getElementById('progress-fill').classList.remove('rest');
     document.getElementById('phase-label').textContent = '';
     document.getElementById('set-counter').textContent = '';
-    currentSet = 1; currentPhase = 'work';
     updateDisplay(0);
   }
+
+  // ---- バックグラウンドから戻ったとき再同期 ----
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running && mode === 'countdown') {
+      // 期限切れチェック（バックグラウンド中に終わっていた場合）
+      if (phaseEndTime && Date.now() >= phaseEndTime) {
+        clearInterval(interval); interval = null;
+        handlePhaseComplete();
+      }
+    }
+  });
 </script>
 </body>
 </html>
